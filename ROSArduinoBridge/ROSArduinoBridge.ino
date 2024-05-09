@@ -94,7 +94,7 @@
 
   /* Stop the sweepers if the robot hasn't received a movement command
     in this number of milliseconds */
-  #define AUTO_STOP_SWEEPERS_INTERVAL 2000
+  #define AUTO_STOP_SWEEPERS_INTERVAL 1000
 
   /* Reset the sweepers counter if they haven't had a problem
     in this number of milliseconds */
@@ -137,6 +137,8 @@ bool ServoUp = false;
 bool ServoDown = true;
 unsigned long timerStart = 0;
 bool timerActive = false;
+
+bool sweeper_blocked = false;
 
 /* Clear the current command parameters */
 void resetCommand() {
@@ -188,13 +190,13 @@ int runCommand() {
 #ifdef USE_MAXON_MOTOR
   case MOTOR_RAW_PWM:
     /* Reset the auto stop timer */
-    lastMotorCommand = millis();
-    setMotorSpeeds(arg1, arg2);
+    if (arg1 != 0 || arg2 != 0) lastMotorCommand = millis(); 
+    setMotorSpeeds(arg1, arg2, sweeper_blocked);
     current_speed_l = arg1;
     current_speed_r = arg2; 
-    Serial.println("OK"); 
+    Serial.println("OK");  
     break;
-#endif
+#endif 
 
 #ifdef USE_SERVOS
   case SERVO_WRITE:
@@ -240,7 +242,7 @@ void setup() {
   pinMode(LEFT_SWEEPER_IS,INPUT);           // Analog 0
   pinMode(RIGHT_SWEEPER_IS,INPUT);          // Analog 1
   pinMode(EOC_SWITCH,INPUT);                // Analog 2
-
+  pinMode(RIGHT_MOTOR_DIRECTION, OUTPUT);    // Analog 4
 
   initMotorController();
 }
@@ -317,7 +319,7 @@ void loop() {
   #ifdef USE_MAXON_MOTOR
     // Check to see if we have exceeded the auto-stop interval
     if ((millis() - lastMotorCommand) > AUTO_STOP_INTERVAL) {;
-      setMotorSpeeds(0, 0);
+      setMotorSpeeds(0, 0, sweeper_blocked);
       current_speed_l = 0;
       current_speed_r = 0;
     } 
@@ -328,12 +330,11 @@ void loop() {
       stopSweeper();
     } // Reset the sweepers counter if they haven't had a problem
     if ((millis() - lastSweeperProblem) > SWEEPER_MEMORY) {;
-      sweeper_blocked= false;
       counter = 0;
       lastSweeperProblem = millis();
     } // Stop the reverse process after a moment
     if (sweeper_blocked && (millis() - lastSweeperReverse) > SWEEPER_REVERSE_TIME) {  
-      sweeper_blocked= false;
+      sweeper_blocked = false;
       stopSweeper();
     }
   #endif
@@ -360,7 +361,7 @@ void loop() {
       turnServo(RIGHT, 600);
     }
     // Check if 4.4 seconds have passed since the timer was started
-    if (millis() - timerStart >= 4400) {
+    if (millis() - timerStart >= 4600) {
       ServoDown = true;
       stopServo(); 
       servo_state = IDLE;         // Change state to IDLE
