@@ -182,7 +182,7 @@ bool readingsFilled = false;          // Flag to indicate if the array is filled
 #define SCREEN_HEIGHT 32
 #define OLED_RESET    -1
 #define SCREEN_ADDRESS 0x3C
-#define OLED_INTERVAL 1000
+#define OLED_INTERVAL 500
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 unsigned long startTime;
 unsigned long previousMillis_OLED = 0;
@@ -404,13 +404,13 @@ void battery_voltage() {
       // Update EMA
       voltage_battery = alpha * medianVoltage + (1 - alpha) * voltage_battery;
     }
-    // Compute battery percentage (0% = 10.5V, 100% = 12.6V)
-    if (voltage_battery < 10.0) {
+    // Compute battery percentage (0% = 10.2V, 100% = 12.55V)
+    if (voltage_battery < 10.2) {
       battery_pourcentage = 0;
     } else if (voltage_battery > 12.55) {
       battery_pourcentage = 100;
     } else {
-      battery_pourcentage = round(((voltage_battery - 10.5) / 2.55) * 100);
+      battery_pourcentage = round(((voltage_battery - 10.2) / 2.35) * 100);
     }
   }
 }
@@ -425,7 +425,7 @@ void control_LEDs() {
 
       // Update LED brightness
       if (fadeDirection) {
-        fadeCounter++;
+        fadeCounter += 2;
         if (fadeCounter >= 255) {
           fadeDirection = false;
           if (colorDirection) {
@@ -441,7 +441,7 @@ void control_LEDs() {
           }
         }
       } else {
-        fadeCounter--;
+        fadeCounter -= 2;
         if (fadeCounter <= 120) {
           fadeDirection = true;
           if (colorDirection) {
@@ -587,15 +587,14 @@ void detect_duplo() {
 /* Enter the main loop.  Read and parse input from the serial port,
  run any valid commands and check for auto-stop conditions. */
 void loop() {
+  battery_voltage();
+  detect_duplo();
   if (millis() - previousMillis_OLED >= OLED_INTERVAL) {
     previousMillis_OLED = millis();
-    battery_voltage();
     drawBattery();
     drawCounter();
-    control_LEDs();
   }
-
-  detect_duplo();
+  control_LEDs();
 
   #ifdef USE_SWEEPERS
     static unsigned long timePoint = 0;    // current sense and diagnosis,if you want to use this
@@ -680,6 +679,7 @@ void loop() {
     if (digitalRead(EOC_SWITCH) == 0){
       duplo_storage = 0;
       stopServo();
+      duplo_storage = 0;
       ServoUp = true; // Prevent the servo from breaking the EOC switch
       ServoDown = false;
       servo_state = IDLE;
@@ -697,6 +697,10 @@ void loop() {
       }
       FastLED.show();
       turnServo(RIGHT, 600);
+      for(size_t i=0; i<NUM_LEDS; i++){
+        leds[i] = CRGB(0, 0, 150);
+      }
+      FastLED.show();
     }
     // Check if 4.4 seconds have passed since the timer was started
     if (millis() - timerStart >= 4600) {
