@@ -182,8 +182,10 @@ bool readingsFilled = false;          // Flag to indicate if the array is filled
 #define SCREEN_HEIGHT 32
 #define OLED_RESET    -1
 #define SCREEN_ADDRESS 0x3C
+#define OLED_INTERVAL 1000
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 unsigned long startTime;
+unsigned long previousMillis_OLED = 0;
 
 // Duplo sensor variables
 VL53L0X sensor;
@@ -355,65 +357,60 @@ void current_sense()                  // current sense and diagnosis
 }
 
 void battery_voltage() {
-  unsigned int currentMillis_V = millis();
+  int val = analogRead(BATTERY_VOLTAGE);
+  float voltage_received = (val * 5.0) / 1023.0;
+  float voltage_real = voltage_received * 2.5; // Multiply by 2.5 to get the real voltage
 
-  if (currentMillis_V - previousMillis_V >= 500) {
-    previousMillis_V = currentMillis_V;
-    int val = analogRead(BATTERY_VOLTAGE);
-    float voltage_received = (val * 5.0) / 1023.0;
-    float voltage_real = voltage_received * 2.5; // Multiply by 2.5 to get the real voltage
+  // Store the reading in the array
+  voltageReadings[currentIndex] = voltage_real;
+  currentIndex++;
 
-    // Store the reading in the array
-    voltageReadings[currentIndex] = voltage_real;
-    currentIndex++;
+  // Check if the array is filled
+  if (currentIndex >= NUM_READINGS) {
+    currentIndex = 0;  // Reset the index
+    readingsFilled = true;
+  }
 
-    // Check if the array is filled
-    if (currentIndex >= NUM_READINGS) {
-      currentIndex = 0;  // Reset the index
-      readingsFilled = true;
+  // Only update the voltage if the array is filled
+  if (readingsFilled) {
+    // Copy readings into a temporary array for sorting
+    float sortedReadings[NUM_READINGS];
+    for (int i = 0; i < NUM_READINGS; i++) {
+      sortedReadings[i] = voltageReadings[i];
     }
 
-    // Only update the voltage if the array is filled
-    if (readingsFilled) {
-      // Copy readings into a temporary array for sorting
-      float sortedReadings[NUM_READINGS];
-      for (int i = 0; i < NUM_READINGS; i++) {
-        sortedReadings[i] = voltageReadings[i];
-      }
-
-      // Sort the array to find the median
-      for (int i = 0; i < NUM_READINGS - 1; i++) {
-        for (int j = i + 1; j < NUM_READINGS; j++) {
-          if (sortedReadings[i] > sortedReadings[j]) {
-            float temp = sortedReadings[i];
-            sortedReadings[i] = sortedReadings[j];
-            sortedReadings[j] = temp;
-          }
+    // Sort the array to find the median
+    for (int i = 0; i < NUM_READINGS - 1; i++) {
+      for (int j = i + 1; j < NUM_READINGS; j++) {
+        if (sortedReadings[i] > sortedReadings[j]) {
+          float temp = sortedReadings[i];
+          sortedReadings[i] = sortedReadings[j];
+          sortedReadings[j] = temp;
         }
       }
-      // Find the median value
-      float medianVoltage;
-      if (NUM_READINGS % 2 == 0) {
-        medianVoltage = (sortedReadings[NUM_READINGS / 2 - 1] + sortedReadings[NUM_READINGS / 2]) / 2.0;
-      } else {
-        medianVoltage = sortedReadings[NUM_READINGS / 2];
-      }
-      // Use the median value to update the battery voltage
-      if (first_reading) {
-        voltage_battery = medianVoltage;
-        first_reading = false;
-      } else {
-        // Update EMA
-        voltage_battery = alpha * medianVoltage + (1 - alpha) * voltage_battery;
-      }
-      // Compute battery percentage (0% = 10.5V, 100% = 12.6V)
-      if (voltage_battery < 10.0) {
-        battery_pourcentage = 0;
-      } else if (voltage_battery > 12.55) {
-        battery_pourcentage = 100;
-      } else {
-        battery_pourcentage = round(((voltage_battery - 10.5) / 2.55) * 100);
-      }
+    }
+    // Find the median value
+    float medianVoltage;
+    if (NUM_READINGS % 2 == 0) {
+      medianVoltage = (sortedReadings[NUM_READINGS / 2 - 1] + sortedReadings[NUM_READINGS / 2]) / 2.0;
+    } else {
+      medianVoltage = sortedReadings[NUM_READINGS / 2];
+    }
+    // Use the median value to update the battery voltage
+    if (first_reading) {
+      voltage_battery = medianVoltage;
+      first_reading = false;
+    } else {
+      // Update EMA
+      voltage_battery = alpha * medianVoltage + (1 - alpha) * voltage_battery;
+    }
+    // Compute battery percentage (0% = 10.5V, 100% = 12.6V)
+    if (voltage_battery < 10.0) {
+      battery_pourcentage = 0;
+    } else if (voltage_battery > 12.55) {
+      battery_pourcentage = 100;
+    } else {
+      battery_pourcentage = round(((voltage_battery - 10.5) / 2.55) * 100);
     }
   }
 }
@@ -590,11 +587,14 @@ void detect_duplo() {
 /* Enter the main loop.  Read and parse input from the serial port,
  run any valid commands and check for auto-stop conditions. */
 void loop() {
+  if (millis() - previousMillis_OLED >= OLED_INTERVAL) {
+    previousMillis_OLED = millis();
+    battery_voltage();
+    drawBattery();
+    drawCounter();
+    control_LEDs();
+  }
 
-  battery_voltage();
-  drawBattery();
-  drawCounter();
-  control_LEDs();
   detect_duplo();
 
   #ifdef USE_SWEEPERS
