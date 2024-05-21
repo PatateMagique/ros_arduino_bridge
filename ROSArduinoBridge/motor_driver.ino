@@ -28,18 +28,20 @@
       spd = map(spd, 0, MAX_SPEED, MIN_PWM, MAX_PWM);
     }
     if (spd <= MIN_PWM && i == LEFT) {
-      digitalWrite(LEFT_MOTOR_ENABLE, LOW); 
+      digitalWrite(LEFT_MOTOR_ENABLE, LOW);
+      //analogWrite(LEFT_MOTOR_MOVE, MIN_PWM);
       return; 
     }
     else if (spd <= MIN_PWM && i == RIGHT) {
       digitalWrite(RIGHT_MOTOR_ENABLE, LOW);
+      //analogWrite(RIGHT_MOTOR_MOVE, MIN_PWM);
       return;
     }
     if (i == LEFT) { 
       digitalWrite(LEFT_MOTOR_ENABLE, HIGH);
       if      (reverse == 0) { digitalWrite(LEFT_MOTOR_DIRECTION, HIGH);}
       else if (reverse == 1) { digitalWrite(LEFT_MOTOR_DIRECTION, LOW);}
-        analogWrite(LEFT_MOTOR_MOVE, spd);
+      analogWrite(LEFT_MOTOR_MOVE, spd);
     }
     else /*if (i == RIGHT) //no need for condition*/ {
       digitalWrite(RIGHT_MOTOR_ENABLE, HIGH);

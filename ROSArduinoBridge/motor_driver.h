@@ -4,7 +4,7 @@
 
 #ifdef USE_MAXON_MOTOR
 
-  #define RIGHT_MOTOR_MOVE 5
+  #define RIGHT_MOTOR_MOVE 5 
   #define RIGHT_MOTOR_ENABLE 6
   #define RIGHT_MOTOR_DIRECTION 7
   
