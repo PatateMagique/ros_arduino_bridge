@@ -6,7 +6,7 @@
 #define COMMANDS_H
  
 #define ANALOG_READ    'a'
-#define GET_BAUDRATE   'b'
+#define GET_SYSTEM_DATA  'b'
 #define PIN_MODE       'c'
 #define DIGITAL_READ   'd'
 #define MOTOR_RAW_PWM  'o'
