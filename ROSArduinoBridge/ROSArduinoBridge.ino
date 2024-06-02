@@ -53,7 +53,7 @@
 //#undef USE_SWEEPERS // Comment this line out if you want to use the sweepers
 
 /* Serial port baud rate */
-#define BAUDRATE     57600
+#define BAUDRATE 9600
 
 #define BATTERY_VOLTAGE A7
 
@@ -621,7 +621,7 @@ void loop() {
     
     // Read the next character
     chr = Serial.read();
-    Serial.print(chr);
+    //Serial.print(chr);
 
     // Terminate a command with a CR
     if (chr == 13) {
