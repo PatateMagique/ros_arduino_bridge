@@ -52,7 +52,7 @@
   void setMotorSpeeds(int leftSpeed, int rightSpeed, bool sweeper_blocked) {
     #ifdef USE_SWEEPERS
       if ((leftSpeed > 0 || rightSpeed > 0) && not sweeper_blocked) activateSweeper();
-      //else stopSweeper();
+      else  if ((leftSpeed < 0 || rightSpeed < 0) && not sweeper_blocked) stopSweeper();
     #endif
     setMotorSpeed(LEFT, leftSpeed);
     setMotorSpeed(RIGHT, rightSpeed);

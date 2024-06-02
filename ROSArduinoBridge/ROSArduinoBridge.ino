@@ -131,7 +131,7 @@ char cmd;
 // Character arrays to hold the first and second arguments
 char argv1[16];
 char argv2[16];
-// The arguments converted to integers
+
 long arg1;
 long arg2;
 
@@ -158,8 +158,8 @@ CRGB leds[NUM_LEDS];
 
 unsigned long previousMillis_LED = 0;
 unsigned long previousMillis_LED_2 = 0;
-unsigned long interval_LED = 0;
-unsigned long interval_LED_2 = 0;
+unsigned long interval_LED = 50;
+unsigned long interval_LED_2 = 50;
 bool ledsOn = false;
 int fadeCounter = 255;
 int current_color = 0;
@@ -175,7 +175,6 @@ bool first_reading = true; // Flag to indicate the first reading
 #define NUM_READINGS 5  // Number of readings for the median filter
 float voltageReadings[NUM_READINGS];  // Array to store voltage readings
 int currentIndex = 0;                 // Current index in the array
-bool readingsFilled = false;          // Flag to indicate if the array is filled
 
 // Screen Variables
 #define SCREEN_WIDTH 128
@@ -183,9 +182,11 @@ bool readingsFilled = false;          // Flag to indicate if the array is filled
 #define OLED_RESET    -1
 #define SCREEN_ADDRESS 0x3C
 #define OLED_INTERVAL 500
+#define SENSOR_INTERVAL 30
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 unsigned long startTime;
 unsigned long previousMillis_OLED = 0;
+unsigned long previousMillis_SENSOR = 0;
 
 // Duplo sensor variables
 VL53L0X sensor;
@@ -208,75 +209,76 @@ void resetCommand() {
 
 /* Run a command.  Commands are defined in commands.h */
 int runCommand() {
+
   int i = 0;
   char *p = argv1;
   char *str;
   int pid_args[4];
   arg1 = atoi(argv1);
   arg2 = atoi(argv2);
-  
+
   switch(cmd) {
-  case GET_SYSTEM_DATA:
-    Serial.print(current_speed_l);
-    Serial.print(" ");
-    Serial.print(current_speed_r);
-    Serial.print(" ");
-    Serial.print(battery_pourcentage);
-    Serial.print(" ");
-    Serial.println(duplo_storage);
-    break;
-  case ANALOG_READ:
-    Serial.print(current_speed_l);
-    Serial.print(" ");
-    Serial.println(current_speed_r);
-    break;
-  case DIGITAL_READ:
-    Serial.println(digitalRead(arg1));
-    break;
-  case ANALOG_WRITE:
-    analogWrite(arg1, arg2);
-    Serial.println("OK"); 
-    break;
-  case DIGITAL_WRITE:
-    if (arg2 == 0) digitalWrite(arg1, LOW);
-    else if (arg2 == 1) digitalWrite(arg1, HIGH);
-    Serial.println("OK"); 
-    break;
-  case PIN_MODE:
-    if (arg2 == 0) pinMode(arg1, INPUT);
-    else if (arg2 == 1) pinMode(arg1, OUTPUT);
-    Serial.println("OK");
-    break;
-  
-#ifdef USE_MAXON_MOTOR
-  case MOTOR_RAW_PWM:
-    /* Reset the auto stop timer */
-    if (arg1 != 0 || arg2 != 0) lastMotorCommand = millis(); 
-    setMotorSpeeds(arg1, arg2, sweeper_blocked);
-    current_speed_l = arg1;
-    current_speed_r = arg2; 
-    Serial.println("OK");  
-    break;
-#endif 
+    case GET_SYSTEM_DATA:
+      Serial.print(current_speed_l);
+      Serial.print(" ");
+      Serial.print(current_speed_r);
+      Serial.print(" ");
+      Serial.print(battery_pourcentage);
+      Serial.print(" ");
+      Serial.println(duplo_eaten);
+      break;
+    case ANALOG_READ:
+      Serial.print(current_speed_l);
+      Serial.print(" ");
+      Serial.println(current_speed_r);
+      break;
+    case DIGITAL_READ:
+      Serial.println(digitalRead(arg1));
+      break;
+    case ANALOG_WRITE:
+      analogWrite(arg1, arg2);
+      Serial.println("OK"); 
+      break;
+    case DIGITAL_WRITE:
+      if (arg2 == 0) digitalWrite(arg1, LOW);
+      else if (arg2 == 1) digitalWrite(arg1, HIGH);
+      Serial.println("OK"); 
+      break;
+    case PIN_MODE:
+      if (arg2 == 0) pinMode(arg1, INPUT);
+      else if (arg2 == 1) pinMode(arg1, OUTPUT);
+      Serial.println("OK");
+      break;
+    
+  #ifdef USE_MAXON_MOTOR
+    case MOTOR_RAW_PWM:
+      /* Reset the auto stop timer */
+      if (arg1 != 0 || arg2 != 0) lastMotorCommand = millis(); 
+      setMotorSpeeds(arg1, arg2, sweeper_blocked);
+      current_speed_l = arg1;
+      current_speed_r = arg2;
+      Serial.println("OK");
+      break;
+  #endif 
 
-#ifdef USE_SERVOS
-  case SERVO_WRITE:
-    if (arg1 == 1) {
-      servo_state = ROTATING_L;
-      Serial.println("OK");
-    } else if (arg1 == 0) {
-      servo_state = ROTATING_R;
-      Serial.println("OK");
-    } else {
-      servo_state = IDLE;
-      Serial.println("OK");
-    }    
-    break;
-#endif
+  #ifdef USE_SERVOS
+    case SERVO_WRITE:
+      if (arg1 == 2) {
+        servo_state = ROTATING_L;
+        Serial.println("OK");
+      } else if (arg1 == 1) {
+        servo_state = ROTATING_R;
+        Serial.println("OK");
+      } else {
+        servo_state = IDLE;
+        Serial.println("OK");
+      }    
+      break;
+  #endif
 
-  default:
-    Serial.println("Invalid Command");
-    break;
+    default:
+      Serial.println("Invalid Command");
+      break;
   }
 }
 
@@ -311,6 +313,9 @@ void setup() {
 
   initMotorController();
 
+  // Initialize the battery voltage
+  battery_voltage();
+
   // Initialize the LEDs
   FastLED.addLeds<WS2812, PIN_LEDS, GRB>(leds, NUM_LEDS);
   for(size_t i=0; i<NUM_LEDS; i++){
@@ -319,7 +324,7 @@ void setup() {
   FastLED.show();
 
   // Initialize the VL53L0X sensor
-  sensor.setTimeout(500);
+  sensor.setTimeout(800);
   if (!sensor.init())
   {
     Serial.println("Failed to detect and initialize sensor!");
@@ -333,7 +338,7 @@ void setup() {
     for(;;);
   }
   display.display();
-  delay(2000);
+  delay(500);
   display.clearDisplay();
 }
 
@@ -359,57 +364,57 @@ void battery_voltage() {
   float voltage_received = (val * 5.0) / 1023.0;
   float voltage_real = voltage_received * 2.5; // Multiply by 2.5 to get the real voltage
 
-  // Store the reading in the array
-  voltageReadings[currentIndex] = voltage_real;
-  currentIndex++;
-
-  // Check if the array is filled
-  if (currentIndex >= NUM_READINGS) {
-    currentIndex = 0;  // Reset the index
-    readingsFilled = true;
+  // If this is the first reading, fill the array with the first reading value
+  if (first_reading) {
+    for (int i = 0; i < NUM_READINGS; i++) {
+      voltageReadings[i] = voltage_real;
+    }
+    voltage_battery = voltage_real;
+    first_reading = false;
+    currentIndex = 0;
+  } else {
+    // Store the reading in the array
+    voltageReadings[currentIndex] = voltage_real;
+    currentIndex++;
+    // Check if the array is filled
+    if (currentIndex >= NUM_READINGS) {
+      currentIndex = 0;  // Reset the index
+    }
   }
 
-  // Only update the voltage if the array is filled
-  if (readingsFilled) {
-    // Copy readings into a temporary array for sorting
-    float sortedReadings[NUM_READINGS];
-    for (int i = 0; i < NUM_READINGS; i++) {
-      sortedReadings[i] = voltageReadings[i];
-    }
+  // Copy readings into a temporary array for sorting 
+  float sortedReadings[NUM_READINGS];
+  for (int i = 0; i < NUM_READINGS; i++) {
+    sortedReadings[i] = voltageReadings[i];
+  }
 
-    // Sort the array to find the median
-    for (int i = 0; i < NUM_READINGS - 1; i++) {
-      for (int j = i + 1; j < NUM_READINGS; j++) {
-        if (sortedReadings[i] > sortedReadings[j]) {
-          float temp = sortedReadings[i];
-          sortedReadings[i] = sortedReadings[j];
-          sortedReadings[j] = temp;
-        }
+  // Sort the array to find the median
+  for (int i = 0; i < NUM_READINGS - 1; i++) {
+    for (int j = i + 1; j < NUM_READINGS; j++) {
+      if (sortedReadings[i] > sortedReadings[j]) {
+        float temp = sortedReadings[i];
+        sortedReadings[i] = sortedReadings[j];
+        sortedReadings[j] = temp;
       }
     }
-    // Find the median value
-    float medianVoltage;
-    if (NUM_READINGS % 2 == 0) {
-      medianVoltage = (sortedReadings[NUM_READINGS / 2 - 1] + sortedReadings[NUM_READINGS / 2]) / 2.0;
-    } else {
-      medianVoltage = sortedReadings[NUM_READINGS / 2];
-    }
-    // Use the median value to update the battery voltage
-    if (first_reading) {
-      voltage_battery = medianVoltage;
-      first_reading = false;
-    } else {
-      // Update EMA
-      voltage_battery = alpha * medianVoltage + (1 - alpha) * voltage_battery;
-    }
-    // Compute battery percentage (0% = 10.2V, 100% = 12.55V)
-    if (voltage_battery < 10.2) {
-      battery_pourcentage = 0;
-    } else if (voltage_battery > 12.55) {
-      battery_pourcentage = 100;
-    } else {
-      battery_pourcentage = round(((voltage_battery - 10.2) / 2.35) * 100);
-    }
+  }
+  // Find the median value
+  float medianVoltage;
+  if (NUM_READINGS % 2 == 0) {
+    medianVoltage = (sortedReadings[NUM_READINGS / 2 - 1] + sortedReadings[NUM_READINGS / 2]) / 2.0;
+  } else {
+    medianVoltage = sortedReadings[NUM_READINGS / 2];
+  }
+  // Use the median value to update the battery voltage
+  voltage_battery = alpha * medianVoltage + (1 - alpha) * voltage_battery;
+
+  // Compute battery percentage (0% = 10.3V, 100% = 12.55V)
+  if (voltage_battery < 10.3) {
+    battery_pourcentage = 0;
+  } else if (voltage_battery > 12.55) {
+    battery_pourcentage = 100;
+  } else {
+    battery_pourcentage = round(((voltage_battery - 10.3) / 2.25) * 100);
   }
 }
 
@@ -417,13 +422,13 @@ void control_LEDs() {
 
   unsigned long currentMillis_LED = millis();
 
-  if (current_speed_l == 0 && current_speed_r == 0){
+  if (current_speed_l == 0 && current_speed_r == 0 && servo_state != ROTATING_L && servo_state != ROTATING_R) {
     if (currentMillis_LED - previousMillis_LED >= interval_LED) {
       previousMillis_LED = currentMillis_LED;
 
       // Update LED brightness
       if (fadeDirection) {
-        fadeCounter += 2;
+        fadeCounter += 3;
         if (fadeCounter >= 255) {
           fadeDirection = false;
           if (colorDirection) {
@@ -439,7 +444,7 @@ void control_LEDs() {
           }
         }
       } else {
-        fadeCounter -= 2;
+        fadeCounter -= 3;
         if (fadeCounter <= 120) {
           fadeDirection = true;
           if (colorDirection) {
@@ -464,20 +469,23 @@ void control_LEDs() {
 
       // Update LED brightness
       if (fadeDirection) {
-        fadeCounter++;
+        fadeCounter += 3;
         if (fadeCounter >= 255) {
           fadeDirection = false;
         }
       } else {
-        fadeCounter--;
+        fadeCounter -= 3;
         if (fadeCounter <= 0) {
           fadeDirection = true;
         }
       }
+      if (servo_state == ROTATING_L) {
+        fill_solid(leds, NUM_LEDS, CHSV(190, 255, fadeCounter));
+      } else {
+        fill_solid(leds, NUM_LEDS, CHSV(120, 255, fadeCounter));
+      }
+      FastLED.show();
     }
-  // Set LED brightness
-  fill_solid(leds, NUM_LEDS, CHSV(0, 255, fadeCounter));
-  FastLED.show();
   } else {
     if (currentMillis_LED - previousMillis_LED_2 >= interval_LED_2) {
       previousMillis_LED_2 = currentMillis_LED;
@@ -576,6 +584,10 @@ void detect_duplo() {
       duplo_storage++;
       sensorBelowThreshold = true;
       lastDuploTime = currentMillis; // Update the timestamp
+      for (size_t i = 0; i < NUM_LEDS; i++) {
+        leds[i] = CRGB(255, 255, 255);
+      FastLED.show();
+      }
     }
   } else {
     sensorBelowThreshold = false;
@@ -585,14 +597,17 @@ void detect_duplo() {
 /* Enter the main loop.  Read and parse input from the serial port,
  run any valid commands and check for auto-stop conditions. */
 void loop() {
-  battery_voltage();
-  detect_duplo();
+
+  if (millis() - previousMillis_SENSOR >= SENSOR_INTERVAL) {
+    detect_duplo();
+    previousMillis_SENSOR = millis();
+  }
   if (millis() - previousMillis_OLED >= OLED_INTERVAL) {
+    battery_voltage();
     previousMillis_OLED = millis();
     drawBattery();
     drawCounter();
   }
-  control_LEDs();
 
   #ifdef USE_SWEEPERS
     static unsigned long timePoint = 0;    // current sense and diagnosis,if you want to use this
@@ -601,11 +616,12 @@ void loop() {
       timePoint = millis();
     }
   #endif
-  
+
   while (Serial.available() > 0) {
     
     // Read the next character
     chr = Serial.read();
+    Serial.print(chr);
 
     // Terminate a command with a CR
     if (chr == 13) {
@@ -667,48 +683,34 @@ void loop() {
 
 
   if (servo_state == ROTATING_L){
-    if (!ServoUp){
+    if (digitalRead(EOC_SWITCH) != 0){
       turnServo(LEFT, 500);
-      for(size_t i=0; i<NUM_LEDS; i++){
-        leds[i] = CRGB(0, 180, 0);
-      }
-      FastLED.show();
-    } // Check if the end-of-course switch is triggered
-    if (digitalRead(EOC_SWITCH) == 0){
+    } else {
       stopServo();
-      duplo_storage = 0;
-      ServoUp = true; // Prevent the servo from breaking the EOC switch
       ServoDown = false;
+      duplo_storage = 0;
+      servo_state = IDLE;
+    }
+  } else if (servo_state == ROTATING_R) {
+    if (!timerActive && !ServoDown){
+      timerStart = millis();      // Start the timer
+      timerActive = true;         // Activate the timer
+    } 
+    if (timerActive) {
+      if (!ServoDown && (millis() - timerStart <= 4600)){
+        turnServo(RIGHT, 600);
+      } else {
+        ServoDown = true;
+        stopServo(); 
+        timerActive = false;        // Deactivate the timer
+        servo_state = IDLE;
+      }
+    } else {
       servo_state = IDLE;
     }
   }
-  if (servo_state == ROTATING_R) {
-    if (!timerActive && !ServoDown){
-      ServoUp = false;
-      timerStart = millis();      // Start the timer
-      timerActive = true;         // Activate the timer
-    }
-    if (!ServoDown){
-      turnServo(RIGHT, 600);
-      for(size_t i=0; i<NUM_LEDS; i++){
-        leds[i] = CRGB(0, 0, 150);
-      }
-      FastLED.show();
-    }
-    // Check if 4.4 seconds have passed since the timer was started
-    if (millis() - timerStart >= 4600) {
-      ServoDown = true;
-      stopServo(); 
-      servo_state = IDLE;         // Change state to IDLE
-      timerActive = false;        // Deactivate the timer
-    }
-  }
-  if (servo_state == IDLE) {
-    stopServo(); 
-  }
+  control_LEDs();
 }
-
-
 
 // Code to put in loop() if we want to use the Maxon motors in closed loop
 
