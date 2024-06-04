@@ -55,8 +55,6 @@
 /* Serial port baud rate */
 #define BAUDRATE 9600
 
-#define BATTERY_VOLTAGE A7
-
 /* Include the Arduino standard libraries */
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"
@@ -80,8 +78,7 @@
   /* Motor driver function definitions */
   #include "motor_driver.h" 
 
-  /* Stop the robot if it hasn't received a movement command
-  in this number of milliseconds */
+  /* Stop the robot if it hasn't received a movement command in this number of milliseconds */
   #define AUTO_STOP_INTERVAL 1000
 
   long lastMotorCommand = AUTO_STOP_INTERVAL;
@@ -93,69 +90,59 @@
   /* Servo function definitions */
   #include "servo.h"
 
+  enum ServoState {ROTATING_R, ROTATING_L, IDLE}; // servo state: rotating/idle
+  ServoState servo_state = IDLE;
+  bool ServoUp = false;
+  bool ServoDown = true;
+  unsigned long timerStart = 0;
+  bool timerActive = false;
+
 #endif
 
 #ifdef USE_SWEEPERS
 
-  /* Sweeper check parameters*/
   #define LEFT_SWEEPER_ISSUE 45
   #define RIGHT_SWEEPER_ISSUE 40
   #define SWEEPER_CHECK_INTERVAL 200
 
-  /* Stop the sweepers if the robot hasn't received a movement command
-    in this number of milliseconds */
+  /* Stop the sweepers if the robot hasn't received a movement command in this number of milliseconds */
   #define AUTO_STOP_SWEEPERS_INTERVAL 1000
 
-  /* Reset the sweepers counter if they haven't had a problem
-    in this number of milliseconds */
+  /* Reset the sweepers counter if they haven't had a problem in this number of milliseconds */
   #define SWEEPER_MEMORY 2000
 
-  /* Stop the sweepers after this number of milliseconds
-    if they had to run in reverse */
+  /* Stop the sweepers after this number of milliseconds if they had to run in reverse */
   #define SWEEPER_REVERSE_TIME 2000
 
   long lastSweeperProblem = SWEEPER_MEMORY;
   long lastSweeperReverse = SWEEPER_REVERSE_TIME;
 
+  bool sweeper_blocked = false;
+  int counter = 0; // The counter used for current sense and diagnosis
+
 #endif
 
-/* Variable initialization */
+/* Global Variable initialization */
 
-// A pair of varibles to help parse serial commands (thanks Fergs)
-int arg = 0;
+// Serial command variables
+int arg = 0;    // A pair of varibles to help parse serial commands (thanks Fergs)
 int index = 0;
-// Variable to hold an input character
-char chr;
-// Variable to hold the current single-character command
-char cmd;
-// Character arrays to hold the first and second arguments
-char argv1[16];
+char chr;       // Variable to hold an input character
+char cmd;       // Variable to hold the current single-character command
+char argv1[16]; // Character arrays to hold the first and second arguments
 char argv2[16];
-
 long arg1;
 long arg2;
 
-// The counter used for current sense and diagnosis
-int counter = 0;
 // Variables used fo the open-loop feedback
 float current_speed_l = 0;
 float current_speed_r = 0;
 
-enum ServoState {ROTATING_R, ROTATING_L, IDLE}; // servo state: rotating/idle
-ServoState servo_state = IDLE;
-bool ServoUp = false;
-bool ServoDown = true;
-unsigned long timerStart = 0;
-bool timerActive = false;
-
-bool sweeper_blocked = false;
-
 // LED Variables
 tmElements_t tm;
-#define PIN_LEDS     A5
+#define PIN_LEDS     A2
 #define NUM_LEDS     22
 CRGB leds[NUM_LEDS];
-
 unsigned long previousMillis_LED = 0;
 unsigned long previousMillis_LED_2 = 0;
 unsigned long interval_LED = 50;
@@ -163,16 +150,17 @@ unsigned long interval_LED_2 = 50;
 bool ledsOn = false;
 int fadeCounter = 255;
 int current_color = 0;
-bool fadeDirection = true; // true for increasing brightness, false for decreasing
+bool fadeDirection = true;  // true for increasing brightness, false for decreasing
 bool colorDirection = true; // true for increasing color, false for decreasing
 
 // Voltage Variables
+#define BATTERY_VOLTAGE A4
+#define NUM_READINGS 5                // Number of readings for the median filter
 unsigned long previousMillis_V = 0;
 float voltage_battery = 0;
 int battery_pourcentage = 0;
-const float alpha = 0.1; // Smoothing factor for EMA
-bool first_reading = true; // Flag to indicate the first reading
-#define NUM_READINGS 5  // Number of readings for the median filter
+const float alpha = 0.1;              // Smoothing factor for EMA
+bool first_reading = true;            // Flag to indicate the first reading
 float voltageReadings[NUM_READINGS];  // Array to store voltage readings
 int currentIndex = 0;                 // Current index in the array
 
@@ -188,7 +176,7 @@ unsigned long startTime;
 unsigned long previousMillis_OLED = 0;
 unsigned long previousMillis_SENSOR = 0;
 
-// Duplo sensor variables
+// Sensor Duplo variables
 VL53L0X sensor;
 int duplo_eaten = 0;
 int duplo_storage = 0;
@@ -267,7 +255,8 @@ int runCommand() {
         servo_state = ROTATING_L;
         Serial.println("OK");
       } else if (arg1 == 1) {
-        servo_state = ROTATING_R;
+        if (servo_state == IDLE) {
+          servo_state = ROTATING_R; }
         Serial.println("OK");
       } else {
         servo_state = IDLE;
@@ -295,26 +284,28 @@ void setup() {
   Wire.begin();
 
   // Set up the MAXON and SWEEPERS pins
-  pinMode(LEFT_SWEEPER_DIRECTION, OUTPUT);  // Digital 2
-  pinMode(RIGHT_SWEEPER_MOVE, OUTPUT);      // Digital 3
-  pinMode(LEFT_SWEEPER_MOVE, OUTPUT);       // Digital 4
-  pinMode(RIGHT_MOTOR_MOVE, OUTPUT);        // Digital 5
-  pinMode(RIGHT_MOTOR_ENABLE, OUTPUT);      // Digital 6
-  pinMode(RIGHT_MOTOR_DIRECTION, OUTPUT);   // Digital 7
-  pinMode(LEFT_MOTOR_MOVE, OUTPUT);         // Digital 8
-  pinMode(LEFT_MOTOR_ENABLE, OUTPUT);       // Digital 9
-  pinMode(LEFT_MOTOR_DIRECTION, OUTPUT);    // Digital 10
+  pinMode(RIGHT_MOTOR_DIRECTION, OUTPUT);   // Digital 2
+  pinMode(RIGHT_MOTOR_ENABLE, OUTPUT);      // Digital 3
+  pinMode(RIGHT_MOTOR_MOVE, OUTPUT);        // Digital 4
+
+  pinMode(LEFT_MOTOR_DIRECTION, OUTPUT);    // Digital 5
+  pinMode(LEFT_MOTOR_ENABLE, OUTPUT);       // Digital 6
+  pinMode(LEFT_MOTOR_MOVE, OUTPUT);         // Digital 7
+
+  pinMode(LEFT_SWEEPER_MOVE, OUTPUT);       // Digital 8
+  pinMode(LEFT_SWEEPER_DIRECTION, OUTPUT);  // Digital 9
+  pinMode(RIGHT_SWEEPER_MOVE, OUTPUT);      // Digital 10
   pinMode(RIGHT_SWEEPER_DIRECTION, OUTPUT); // Digital 11
+
   pinMode(LEFT_SWEEPER_IS,INPUT);           // Analog 0
   pinMode(RIGHT_SWEEPER_IS,INPUT);          // Analog 1
   pinMode(EOC_SWITCH,INPUT);                // Analog 2
-  pinMode(RIGHT_MOTOR_DIRECTION, OUTPUT);   // Analog 4
-  pinMode(BATTERY_VOLTAGE, INPUT);          // Analog 7
+  pinMode(RIGHT_MOTOR_DIRECTION, OUTPUT);   // Analog 3
+  pinMode(BATTERY_VOLTAGE, INPUT);          // Analog 4
 
-  initMotorController();
+  initMotorController(); 
 
-  // Initialize the battery voltage
-  battery_voltage();
+  battery_voltage();   // Initialize the battery voltage
 
   // Initialize the LEDs
   FastLED.addLeds<WS2812, PIN_LEDS, GRB>(leds, NUM_LEDS);
@@ -328,7 +319,6 @@ void setup() {
   if (!sensor.init())
   {
     Serial.println("Failed to detect and initialize sensor!");
-    while (1) {}
   }
   sensor.startContinuous();
 
@@ -342,8 +332,7 @@ void setup() {
   display.clearDisplay();
 }
 
-void current_sense()                  // current sense and diagnosis
-{
+void current_sense() {  // current sense and diagnosis
   int val_L=analogRead(LEFT_SWEEPER_IS);
   int val_R=analogRead(RIGHT_SWEEPER_IS);
 
@@ -666,6 +655,7 @@ void loop() {
       current_speed_r = 0;
     } 
   #endif
+
   #ifdef USE_SWEEPERS
     // Stop the sweepers if the robot hasn't received a movement command 
     if ((millis() - lastMotorCommand) > AUTO_STOP_SWEEPERS_INTERVAL) {;
@@ -681,82 +671,35 @@ void loop() {
     }
   #endif
 
-
-  if (servo_state == ROTATING_L){
-    if (digitalRead(EOC_SWITCH) != 0){
-      turnServo(LEFT, 500);
-    } else {
-      stopServo();
-      ServoDown = false;
-      duplo_storage = 0;
-      servo_state = IDLE;
-    }
-  } else if (servo_state == ROTATING_R) {
-    if (!timerActive && !ServoDown){
-      timerStart = millis();      // Start the timer
-      timerActive = true;         // Activate the timer
-    } 
-    if (timerActive) {
-      if (!ServoDown && (millis() - timerStart <= 4600)){
-        turnServo(RIGHT, 600);
+  #ifdef USE_SERVOS
+    if (servo_state == ROTATING_L){
+      if (digitalRead(EOC_SWITCH) != 0){
+        turnServo(LEFT, 500);
       } else {
-        ServoDown = true;
-        stopServo(); 
-        timerActive = false;        // Deactivate the timer
+        stopServo();
+        ServoDown = false;
+        duplo_storage = 0;
         servo_state = IDLE;
       }
-    } else {
-      servo_state = IDLE;
+    } else if (servo_state == ROTATING_R) {
+      if (!timerActive && !ServoDown){
+        timerStart = millis();      // Start the timer
+        timerActive = true;         // Activate the timer
+      } 
+      if (timerActive) {
+        if (!ServoDown && (millis() - timerStart <= 4600)){
+          turnServo(RIGHT, 600);
+        } else {
+          ServoDown = true;
+          stopServo(); 
+          timerActive = false;        // Deactivate the timer
+          servo_state = IDLE;
+        }
+      } else {
+        servo_state = IDLE;
+      }
     }
-  }
+  #endif
+
   control_LEDs();
 }
-
-// Code to put in loop() if we want to use the Maxon motors in closed loop
-
-// int LEFT_VOLTAGE = ((analogRead(A3) * 5.0)/1023.0);
-  // int RIGHT_VOLTAGE = ((analogRead(A1) * 5.0)/1023.0);
-
-  // int RPM_LEFT_READING = 0;
-  // int RPM_RIGHT_READING = 0;
-
-  // if (analogRead(A3) > 610) {
-  //   RPM_LEFT_READING   = ((((analogRead(A3) * 5.0)/1023.0)+(0.09*((analogRead(A3) * 5.0)/1023.0)/3.91))*4500.0)/4; // LEFT MOTOR
-  // } 
-  // else if (analogRead(A3) > 410) {
-  //   RPM_LEFT_READING   = ((((analogRead(A3) * 5.0)/1023.0)+(0.112*((analogRead(A3) * 5.0)/1023.0)/3.91))*4500.0)/4; // LEFT MOTOR
-  // } 
-  // else if (analogRead(A3) > 110) {
-  //   RPM_LEFT_READING   = ((((analogRead(A3) * 5.0)/1023.0)+(0.12*((analogRead(A3) * 5.0)/1023.0)/3.91))*4500.0)/4; // LEFT MOTOR
-  // }
-  // else {
-  //   RPM_LEFT_READING   = ((((analogRead(A3) * 5.0)/1023.0)+(0.75*((analogRead(A3) * 5.0)/1023.0)/3.91))*4500.0)/4; // LEFT MOTOR
-  // }
-
-  // if (analogRead(A1) > 610) {
-  //   RPM_RIGHT_READING  = ((((analogRead(A1) * 5.0)/1023.0)+(0.09*((analogRead(A1) * 5.0)/1023.0)/3.91))*4500.0)/4; // RIGHT MOTOR
-  // } 
-  // else if (analogRead(A1) > 410) {
-  //   RPM_RIGHT_READING  = ((((analogRead(A1) * 5.0)/1023.0)+(0.112*((analogRead(A1) * 5.0)/1023.0)/3.91))*4500.0)/4; // RIGHT MOTOR
-  // } 
-  // else if (analogRead(A1) > 110) {
-  //   RPM_RIGHT_READING  = ((((analogRead(A1) * 5.0)/1023.0)+(0.12*((analogRead(A1) * 5.0)/1023.0)/3.91))*4500.0)/4; // RIGHT MOTOR
-  // }
-  // else {
-  //   RPM_RIGHT_READING  = ((((analogRead(A1) * 5.0)/1023.0)+(0.75*((analogRead(A1) * 5.0)/1023.0)/3.91))*4500.0)/4; // RIGHT MOTOR
-  // }
-
-  // // Calculate EMA
-  // ema_l = alpha * RPM_LEFT_READING + (1 - alpha) * ema_l;
-  // ema_r = alpha * RPM_RIGHT_READING + (1 - alpha) * ema_r;
-
-  
-
-  // And this at the top
-
-  // Variables used for the RPM reading
-// const int nb_samples = 20;
-// const float alpha = 0.01; // Exponential filter factor (adjust as needed)
-
-// float ema_l = 0.0; // Exponential moving average
-// float ema_r = 0.0; // Exponential moving average
