@@ -86,4 +86,10 @@
     digitalWrite(LEFT_SWEEPER_DIRECTION,HIGH);
   }
 
+  void invertSweeperSpeeds() {
+    int temp = RIGHT_SWEEPER_SPEED;
+    RIGHT_SWEEPER_SPEED = LEFT_SWEEPER_SPEED;
+    LEFT_SWEEPER_SPEED = temp;
+  }
+
 #endif

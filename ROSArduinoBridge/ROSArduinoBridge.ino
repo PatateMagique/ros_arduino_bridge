@@ -488,9 +488,9 @@ void control_LEDs() {
         }
       }
       if (servo_state == ROTATING_L) {
-        fill_solid(leds, NUM_LEDS, CHSV(190, 255, fadeCounter));
+        fill_solid(leds, NUM_LEDS, CHSV(160, 255, fadeCounter));
       } else {
-        fill_solid(leds, NUM_LEDS, CHSV(120, 255, fadeCounter));
+        fill_solid(leds, NUM_LEDS, CHSV(115, 255, fadeCounter));
       }
       FastLED.show();
     }
@@ -504,7 +504,8 @@ void control_LEDs() {
       if (ledsOn) {
         fill_solid(leds, NUM_LEDS, CRGB(0, 0, 0));
       } else {
-        fill_solid(leds, NUM_LEDS, CRGB(120, 0, 0));
+        // chose a random purple/pink color
+        fill_solid(leds, NUM_LEDS, CHSV(random(165, 230), 255, 255));
       }
       ledsOn = !ledsOn;
       FastLED.show();
