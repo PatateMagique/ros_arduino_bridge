@@ -89,13 +89,14 @@
 
   /* Servo function definitions */
   #include "servo.h"
-
+  #define SERVO_SAFETY 500
   enum ServoState {ROTATING_R, ROTATING_L, IDLE}; // servo state: rotating/idle
   ServoState servo_state = IDLE;
   bool ServoUp = false;
   bool ServoDown = true;
   unsigned long timerStart = 0;
   bool timerActive = false;
+  unsigned long previousMillis_SERVO = 0;
 
 #endif
 
@@ -410,10 +411,10 @@ void battery_voltage() {
   // Compute battery percentage (0% = 10.3V, 100% = 12.55V)
   if (voltage_battery < 10.3) {
     battery_pourcentage = 0;
-  } else if (voltage_battery > 12.55) {
+  } else if (voltage_battery > 12.52) {
     battery_pourcentage = 100;
   } else {
-    battery_pourcentage = round(((voltage_battery - 10.3) / 2.25) * 100);
+    battery_pourcentage = round(((voltage_battery - 10.3) / 2.22) * 100);
   }
 }
 
@@ -574,22 +575,17 @@ void drawCounter() {
 }
 
 void detect_duplo() {
-  static int stableReadings = 0;  // To count stable readings below threshold
   unsigned long currentMillis = millis();
 
   int sensorValue = sensor.readRangeContinuousMillimeters();
   if (sensor.timeoutOccurred()) { 
-    Serial.print(" TIMEOUT"); 
+    Serial.print("SENSOR TIMEOUT "); 
     return;  // Skip the rest of the loop if a timeout occurred
   }
 
   // Check if sensor value is below the threshold
   if (sensorValue < 230) {
-    if (!sensorBelowThreshold) {
-      stableReadings++;  // Increment stable readings count
-    }
-
-    if (stableReadings > 1 && (currentMillis - lastDuploTime >= debounceDelay)) {  // Confirm detection after 3 stable readings
+    if (!sensorBelowThreshold && (currentMillis - lastDuploTime >= debounceDelay)) {
       newDuplo = true;
       playBuzzer();
       duplo_eaten++;
@@ -597,9 +593,8 @@ void detect_duplo() {
       sensorBelowThreshold = true;
       lastDuploTime = currentMillis; // Update the timestamp
     }
-  } else {
+  } else if (sensorValue > 230){
     sensorBelowThreshold = false;
-    stableReadings = 0;  // Reset stable readings count
   }
 }
 
@@ -724,7 +719,7 @@ void loop() {
         timerActive = true;         // Activate the timer
       } 
       if (timerActive) {
-        if (!ServoDown && (millis() - timerStart <= 2800)){ //4600 ms for 600 speed
+        if (!ServoDown && (millis() - timerStart <= 2750)){ //4600 ms for 600 speed
           turnServo(RIGHT, 1000);
         } else {
           ServoDown = true;
@@ -735,7 +730,10 @@ void loop() {
       } else {
         servo_state = IDLE;
       }
-    }
+    } else if (servo_state == IDLE && (millis() - previousMillis_SERVO >= SERVO_SAFETY)){
+      stopServo();
+      previousMillis_SERVO = millis();
+    } 
   #endif
 
   control_LEDs();
