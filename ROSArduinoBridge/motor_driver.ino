@@ -51,12 +51,18 @@
 
   void setMotorSpeeds(int leftSpeed, int rightSpeed, bool sweeper_blocked) {
     #ifdef USE_SWEEPERS
-      if ((leftSpeed > 0 || rightSpeed > 0) && not sweeper_blocked) activateSweeper();
-      else  if ((leftSpeed < 0 || rightSpeed < 0) && not sweeper_blocked) stopSweeper();
+      if ((leftSpeed > 0 && rightSpeed > 0) && !sweeper_blocked) {
+        activateSweeper();
+      } else if ((leftSpeed < 0 || rightSpeed < 0) && !sweeper_blocked) {
+        stopSweeper();
+      } else if ((abs(leftSpeed) - abs(rightSpeed) <= 100) && (leftSpeed * rightSpeed < 0) && !sweeper_blocked) {
+        // If the speeds of the wheels are almost equal (within a margin of 100) but with opposite signs, stop the sweeper
+        stopSweeper();
+      }
     #endif
     setMotorSpeed(LEFT, leftSpeed);
     setMotorSpeed(RIGHT, rightSpeed);
-  }
+}
 #endif
 
 #ifdef USE_SWEEPERS

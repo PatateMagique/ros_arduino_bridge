@@ -170,7 +170,7 @@ int currentIndex = 0;                 // Current index in the array
 #define OLED_RESET    -1
 #define SCREEN_ADDRESS 0x3C
 #define OLED_INTERVAL 500
-#define SENSOR_INTERVAL 30
+#define SENSOR_INTERVAL 20
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 unsigned long startTime;
 unsigned long previousMillis_OLED = 0;
@@ -181,8 +181,17 @@ VL53L0X sensor;
 int duplo_eaten = 0;
 int duplo_storage = 0;
 bool sensorBelowThreshold = false;
-unsigned long debounceDelay = 500; // Debounce delay in milliseconds
-unsigned long lastDuploTime = 0;   // Timestamp of the last Duplo detection
+unsigned long debounceDelay = 2000; // Debounce delay in milliseconds
+unsigned long lastDuploTime = 0;    // Timestamp of the last Duplo detection
+bool newDuplo = false;
+
+// Buzzer Variables
+#define BUZZER A7
+#define BUZZER_INTERVAL 900
+#define BUZZER_ON_DURATION 100
+unsigned long previousMillis_BUZZER = 0;
+unsigned long previousMillis_BUZZER_ON = 0;
+bool buzzerOn = false;
 
 /* Clear the current command parameters */
 void resetCommand() {
@@ -302,6 +311,7 @@ void setup() {
   pinMode(EOC_SWITCH,INPUT);                // Analog 2
   pinMode(RIGHT_MOTOR_DIRECTION, OUTPUT);   // Analog 3
   pinMode(BATTERY_VOLTAGE, INPUT);          // Analog 4
+  pinMode(BUZZER, OUTPUT);                  // Analog 7
 
   initMotorController(); 
 
@@ -411,7 +421,15 @@ void control_LEDs() {
 
   unsigned long currentMillis_LED = millis();
 
-  if (current_speed_l == 0 && current_speed_r == 0 && servo_state != ROTATING_L && servo_state != ROTATING_R) {
+  if (newDuplo) {
+    fill_solid(leds, NUM_LEDS, CRGB(255, 255, 255));
+    FastLED.show();
+    tone(BUZZER, 340);
+    if (currentMillis_LED - previousMillis_LED >= 300) {
+      previousMillis_LED = currentMillis_LED;
+      newDuplo = false;
+    }
+  } else if (current_speed_l == 0 && current_speed_r == 0 && servo_state != ROTATING_L && servo_state != ROTATING_R) {
     if (currentMillis_LED - previousMillis_LED >= interval_LED) {
       previousMillis_LED = currentMillis_LED;
 
@@ -483,13 +501,9 @@ void control_LEDs() {
 
       // Toggle the LEDs on and off
       if (ledsOn) {
-        for (size_t i = 0; i < NUM_LEDS; i++) {
-          leds[i] = CRGB(0, 0, 0);
-        }
+        fill_solid(leds, NUM_LEDS, CRGB(0, 0, 0));
       } else {
-        for (size_t i = 0; i < NUM_LEDS; i++) {
-          leds[i] = CRGB(120, 0, 0);
-        }
+        fill_solid(leds, NUM_LEDS, CRGB(120, 0, 0));
       }
       ledsOn = !ledsOn;
       FastLED.show();
@@ -560,26 +574,46 @@ void drawCounter() {
 }
 
 void detect_duplo() {
-
+  static int stableReadings = 0;  // To count stable readings below threshold
   unsigned long currentMillis = millis();
 
   int sensorValue = sensor.readRangeContinuousMillimeters();
-  if (sensor.timeoutOccurred()) { Serial.print(" TIMEOUT"); }
+  if (sensor.timeoutOccurred()) { 
+    Serial.print(" TIMEOUT"); 
+    return;  // Skip the rest of the loop if a timeout occurred
+  }
 
   // Check if sensor value is below the threshold
-  if (sensorValue < 225) {
-    if (!sensorBelowThreshold && (currentMillis - lastDuploTime >= debounceDelay)) {
+  if (sensorValue < 230) {
+    if (!sensorBelowThreshold) {
+      stableReadings++;  // Increment stable readings count
+    }
+
+    if (stableReadings > 1 && (currentMillis - lastDuploTime >= debounceDelay)) {  // Confirm detection after 3 stable readings
+      newDuplo = true;
+      playBuzzer();
       duplo_eaten++;
       duplo_storage++;
       sensorBelowThreshold = true;
       lastDuploTime = currentMillis; // Update the timestamp
-      for (size_t i = 0; i < NUM_LEDS; i++) {
-        leds[i] = CRGB(255, 255, 255);
-      FastLED.show();
-      }
     }
   } else {
     sensorBelowThreshold = false;
+    stableReadings = 0;  // Reset stable readings count
+  }
+}
+
+void playBuzzer() {
+  unsigned long currentMillis = millis();
+
+  if (!buzzerOn && currentMillis - previousMillis_BUZZER >= BUZZER_INTERVAL) {
+    previousMillis_BUZZER = currentMillis;
+    previousMillis_BUZZER_ON = currentMillis;
+    tone(BUZZER, 340);
+    buzzerOn = true;
+  } else if (buzzerOn && currentMillis - previousMillis_BUZZER_ON >= BUZZER_ON_DURATION) {
+    noTone(BUZZER);
+    buzzerOn = false;
   }
 }
 
@@ -597,6 +631,9 @@ void loop() {
     drawBattery();
     drawCounter();
   }
+  // actiavte buzzer if the robot goes backward
+  if (current_speed_l < 0 && current_speed_r < 0) playBuzzer();
+  else noTone(BUZZER);
 
   #ifdef USE_SWEEPERS
     static unsigned long timePoint = 0;    // current sense and diagnosis,if you want to use this
@@ -673,7 +710,7 @@ void loop() {
 
   #ifdef USE_SERVOS
     if (servo_state == ROTATING_L){
-      if (digitalRead(EOC_SWITCH) != 0){
+      if (digitalRead(EOC_SWITCH) != 0 && ServoDown){
         turnServo(LEFT, 500);
       } else {
         stopServo();
@@ -687,8 +724,8 @@ void loop() {
         timerActive = true;         // Activate the timer
       } 
       if (timerActive) {
-        if (!ServoDown && (millis() - timerStart <= 4600)){
-          turnServo(RIGHT, 600);
+        if (!ServoDown && (millis() - timerStart <= 2800)){ //4600 ms for 600 speed
+          turnServo(RIGHT, 1000);
         } else {
           ServoDown = true;
           stopServo(); 
