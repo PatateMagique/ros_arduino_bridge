@@ -472,27 +472,15 @@ void control_LEDs() {
     fill_solid(leds, NUM_LEDS, CHSV(current_color, 255, fadeCounter));
     FastLED.show();
   } else if (servo_state == ROTATING_L or servo_state == ROTATING_R) {
-    if (currentMillis_LED - previousMillis_LED >= interval_LED) {
+    if (currentMillis_LED - previousMillis_LED >= OLED_INTERVAL) {
       previousMillis_LED = currentMillis_LED;
 
-      // Update LED brightness
-      if (fadeDirection) {
-        fadeCounter += 3;
-        if (fadeCounter >= 255) {
-          fadeDirection = false;
-        }
-      } else {
-        fadeCounter -= 3;
-        if (fadeCounter <= 0) {
-          fadeDirection = true;
-        }
-      }
       if (servo_state == ROTATING_L) {
-        fill_solid(leds, NUM_LEDS, CHSV(160, 255, fadeCounter));
+        fill_solid(leds, NUM_LEDS, CHSV(160, 255, 255));
       } else {
-        fill_solid(leds, NUM_LEDS, CHSV(115, 255, fadeCounter));
+        fill_solid(leds, NUM_LEDS, CHSV(115, 255, 255));
       }
-      FastLED.show();
+      FastLED.show(); 
     }
   } else {
     if (currentMillis_LED - previousMillis_LED_2 >= interval_LED_2) {
@@ -505,7 +493,7 @@ void control_LEDs() {
         fill_solid(leds, NUM_LEDS, CRGB(0, 0, 0));
       } else {
         // chose a random purple/pink color
-        fill_solid(leds, NUM_LEDS, CHSV(random(165, 230), 255, 255));
+        fill_solid(leds, NUM_LEDS, CHSV(random(173, 227), 255, 255));
       }
       ledsOn = !ledsOn;
       FastLED.show();
@@ -515,28 +503,40 @@ void control_LEDs() {
 
 void drawBattery() {
   display.clearDisplay();
+  bool Blink = false;
   
-  // Calculate the width of the text to center it
-  int16_t x1, y1;
-  uint16_t w, h;
-  char buffer[5];
-  sprintf(buffer, "%d%%", battery_pourcentage);
-  display.setTextSize(2);
-  display.getTextBounds(buffer, 0, 0, &x1, &y1, &w, &h);
-  
-  // Draw percentage text above the battery
-  int16_t textX = (50 - w) / 2;
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(textX, 0);
-  display.print(buffer);
-  
-  // Draw battery outline at the bottom left
-  display.drawRect(0, 16, 50, 14, SSD1306_WHITE);  // Longer battery body
-  display.fillRect(50, 19, 2, 8, SSD1306_WHITE);   // Battery head
-  
-  // Draw battery level
-  int width = map(battery_pourcentage, 0, 100, 0, 46);
-  display.fillRect(2, 18, width, 10, SSD1306_WHITE);
+  if (battery_pourcentage > 40) {
+    Blink = false;
+  } else if (((millis() / 700) % 2) && battery_pourcentage < 30) {
+    Blink = true;
+  } else if (((millis() / 600) % 2) && battery_pourcentage < 20) {
+    Blink = true;
+  } else if (((millis() / 500) % 2) && battery_pourcentage < 10) {
+    Blink = true;
+  }
+  if (!Blink) {
+    // Calculate the width of the text to center it
+    int16_t x1, y1;
+    uint16_t w, h;
+    char buffer[5];
+    sprintf(buffer, "%d%%", battery_pourcentage);
+    display.setTextSize(2);
+    display.getTextBounds(buffer, 0, 0, &x1, &y1, &w, &h);
+    
+    // Draw percentage text above the battery
+    int16_t textX = (50 - w) / 2;
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(textX, 0);
+    display.print(buffer);
+    
+    // Draw battery outline at the bottom left
+    display.drawRect(0, 16, 50, 14, SSD1306_WHITE);  // Longer battery body
+    display.fillRect(50, 19, 2, 8, SSD1306_WHITE);   // Battery head
+    
+    // Draw battery level
+    int width = map(battery_pourcentage, 0, 100, 0, 46);
+    display.fillRect(2, 18, width, 10, SSD1306_WHITE);
+  }
 }
 
 void drawCounter() {
@@ -577,6 +577,7 @@ void drawCounter() {
 
 void detect_duplo() {
   unsigned long currentMillis = millis();
+  static int belowThresholdCount = 0;
 
   int sensorValue = sensor.readRangeContinuousMillimeters();
   if (sensor.timeoutOccurred()) { 
@@ -593,9 +594,14 @@ void detect_duplo() {
       duplo_storage++;
       sensorBelowThreshold = true;
       lastDuploTime = currentMillis; // Update the timestamp
+      invertSweeperSpeeds();
     }
   } else if (sensorValue > 230){
-    sensorBelowThreshold = false;
+    belowThresholdCount++;
+    if (belowThresholdCount > 5) {
+      sensorBelowThreshold = false;
+      belowThresholdCount = 0;
+    }
   }
 }
 
@@ -617,11 +623,11 @@ void playBuzzer() {
  run any valid commands and check for auto-stop conditions. */
 void loop() {
 
-  if (millis() - previousMillis_SENSOR >= SENSOR_INTERVAL) {
+  if (millis() - previousMillis_SENSOR >= SENSOR_INTERVAL && servo_state == IDLE) {
     detect_duplo();
     previousMillis_SENSOR = millis();
   }
-  if (millis() - previousMillis_OLED >= OLED_INTERVAL) {
+  if (millis() - previousMillis_OLED >= OLED_INTERVAL && servo_state == IDLE) {
     battery_voltage();
     previousMillis_OLED = millis();
     drawBattery();
@@ -707,7 +713,7 @@ void loop() {
   #ifdef USE_SERVOS
     if (servo_state == ROTATING_L){
       if (digitalRead(EOC_SWITCH) != 0 && ServoDown){
-        turnServo(LEFT, 500);
+        turnServo(LEFT, 400);
       } else {
         stopServo();
         ServoDown = false;
@@ -720,8 +726,8 @@ void loop() {
         timerActive = true;         // Activate the timer
       } 
       if (timerActive) {
-        if (!ServoDown && (millis() - timerStart <= 2750)){ //4600 ms for 600 speed
-          turnServo(RIGHT, 1000);
+        if (!ServoDown && (millis() - timerStart <= 3600)){ //4600 ms for 600 speed
+          turnServo(RIGHT, 700);
         } else {
           ServoDown = true;
           stopServo(); 

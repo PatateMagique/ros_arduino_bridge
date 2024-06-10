@@ -33,8 +33,8 @@
   #define LEFT_SWEEPER_DIRECTION 10
   #define LEFT_SWEEPER_IS A0
   #define LEFT_SWEEPER_REVERSE_SPEED 85
-  int RIGHT_SWEEPER_SPEED = 125; //115
-  int LEFT_SWEEPER_SPEED = 140; //120
+  int RIGHT_SWEEPER_SPEED = 120; //115
+  int LEFT_SWEEPER_SPEED = 135; //120
 
   void activateSweeper();
   void stopSweeper();
