@@ -1,48 +1,29 @@
 # Arduino Motor Controller
 
-This code turns an Arduino into a motor controller!
-It provides a simple serial interface to communicate with a high-level computer (e.g. running ROS), and generates the appropriate PWM signals for a motor driver, to drive two motors.
+This Arduino library turns an arduino into a multifunction hardware manager.
+It provides a simple serial interface to communicate with a high-level computer (e.g. running ROS), and generates the appropriate PWM signals for motors and other components.
 
-This is a fork of the original code, with some changes, and removal of the ROS nodes (see [this repo](https://github.com/joshnewans/serial_motor_demo) for an alternative). Check out `README-orig.md` for the original README.
+This is a fork Josh Ewans's [ros_arduino_bridge](https://github.com/joshnewans/ros_arduino_bridge) which is also a forw of the original the original [ros_arduino_bridge](https://github.com/hbrobotics/ros_arduino_bridge) code. Our version is a lightweight and stripped down version of Josh's code. Check out `README-original.md` for the original README and `README-articulated.md` for Josh's README.
 
-As I only have need for a subset of the functionality, I have no idea what does and doesn't work, beyond what is detailed below.
-Feedback/improvements are welcome (though no promises on how quickly I'll respond). I currently only use the L298N driver, and the Arduino encoder mode.
-
-
-
-TODO
-- Finish this README
-
+As we only need a subset of the functionality originally proposed by this library, the code has been simplified as much as possible and we kept only the features relevant to the project.
 
 ## Functionality
 
-The main functionality provided is to receive motor speed requests over a serial connection, and provide encoder feedback.
-The original code has provisions for other features - e.g. read/write of digital/analog pins, servo control, but I've never used them.
+The main functionality provided is to receive motor speed requests over a serial connection, control a servo motor and provide system datat feedback.
 
-The main commands to know are
+The main commands to know are:
 
-- `e` - Motor responds with current encoder counts for each motor
-- `r` - Reset encoder values
-- `o <PWM1> <PWM2>` - Set the raw PWM speed of each motor (-255 to 255)
-- `m <Spd1> <Spd2>` - Set the closed-loop speed of each motor in *counts per loop* (Default loop rate is 30, so `(counts per sec)/30`
-- `p <Kp> <Kd> <Ki> <Ko>` - Update the PID parameters
-
+- `a` - Arduino responds with current open-loop wheel speeds.
+- `b` - Arduino responds with current open-loop wheel speeds, battery percentage and the amount of duplos eaten.
+- `o <RPM1> <RPM2>` - Set the raw RPM speed of each motor (-7500 to 7500)
+- `s <Val>` - Actuate the servo motor depending on val (1 down, 2 up, else iddle)
 
 ## Gotchas
 
-Some quick things to note
+Some quick things to note:
 
-- There is an auto timeout (default 2s) so you need to keep sending commands for it to keep moving
-- PID parameter order is PDI (?)
-- Motor speed is in counts per loop
-- Default baud rate 57600
+- There is an auto timeout (default 1s) so you need to keep sending commands for it to keep moving
+- Default baud rate is 9600 for the serial communication and 1 000 000 for the servo motor
 - Needs carriage return (CR)
 - Make sure serial is enabled (user in dialout group)
 - Check out the original readme for more
-
-
-## TODO (maybe)
-- Document PID tuning
-- Make the speed input counts per second
-- Add/test more driver boards
-- Add/test other functionality

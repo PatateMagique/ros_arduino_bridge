@@ -1,10 +1,5 @@
 /***************************************************************
    Motor driver definitions
-   
-   Add a "#elif defined" block to this file to include support
-   for a particular motor driver.  Then add the appropriate
-   #define near the top of the main ROSArduinoBridge.ino file.
-   
    *************************************************************/
    
 #ifdef USE_MAXON_MOTOR
@@ -49,10 +44,11 @@
     }
   }
 
-  void setMotorSpeeds(int leftSpeed, int rightSpeed, bool sweeper_blocked) {
+  void setMotorSpeeds(int leftSpeed, int rightSpeed, bool sweeper_blocked, bool duplo_storage) {
     #ifdef USE_SWEEPERS
       if ((leftSpeed > 0 && rightSpeed > 0) && !sweeper_blocked) {
-        activateSweeper();
+        if (duplo_storage == 0) activateSweeperLow();
+        else activateSweeper();
       } else if ((leftSpeed < 0 || rightSpeed < 0) && !sweeper_blocked) {
         stopSweeper();
       } else if ((abs(leftSpeed) - abs(rightSpeed) <= 100) && (leftSpeed * rightSpeed < 0) && !sweeper_blocked) {
@@ -71,6 +67,13 @@
     analogWrite (RIGHT_SWEEPER_MOVE,RIGHT_SWEEPER_SPEED);
     digitalWrite(RIGHT_SWEEPER_DIRECTION,HIGH);
     analogWrite (LEFT_SWEEPER_MOVE,LEFT_SWEEPER_SPEED);
+    digitalWrite(LEFT_SWEEPER_DIRECTION,LOW);
+  }
+  
+  void activateSweeperLow() {
+    analogWrite (RIGHT_SWEEPER_MOVE,RIGHT_SWEEPER_SPEED_LOW);
+    digitalWrite(RIGHT_SWEEPER_DIRECTION,HIGH);
+    analogWrite (LEFT_SWEEPER_MOVE,LEFT_SWEEPER_SPEED_LOW);
     digitalWrite(LEFT_SWEEPER_DIRECTION,LOW);
   }
 

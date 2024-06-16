@@ -48,9 +48,9 @@
 #define USE_MAXON_MOTOR
 //#undef USE_MAXON_MOTOR // Comment this line out if you want to use the Maxon motors
 #define USE_SERVOS
-//#undef USE_SERVOS // Comment this line out if you want to use the servos
+//#undef USE_SERVOS      // Comment this line out if you want to use the servos
 #define USE_SWEEPERS
-//#undef USE_SWEEPERS // Comment this line out if you want to use the sweepers
+//#undef USE_SWEEPERS    // Comment this line out if you want to use the sweepers
 
 /* Serial port baud rate */
 #define BAUDRATE 9600
@@ -94,8 +94,10 @@
   ServoState servo_state = IDLE;
   bool ServoUp = false;
   bool ServoDown = true;
-  unsigned long timerStart = 0;
-  bool timerActive = false;
+  unsigned long timerDown = 0;
+  unsigned long timerUp = 0;
+  bool timerActiveDown = false;
+  bool timerActiveUp = false;
   unsigned long previousMillis_SERVO = 0;
 
 #endif
@@ -230,29 +232,12 @@ int runCommand() {
       Serial.print(" ");
       Serial.println(current_speed_r);
       break;
-    case DIGITAL_READ:
-      Serial.println(digitalRead(arg1));
-      break;
-    case ANALOG_WRITE:
-      analogWrite(arg1, arg2);
-      Serial.println("OK"); 
-      break;
-    case DIGITAL_WRITE:
-      if (arg2 == 0) digitalWrite(arg1, LOW);
-      else if (arg2 == 1) digitalWrite(arg1, HIGH);
-      Serial.println("OK"); 
-      break;
-    case PIN_MODE:
-      if (arg2 == 0) pinMode(arg1, INPUT);
-      else if (arg2 == 1) pinMode(arg1, OUTPUT);
-      Serial.println("OK");
-      break;
     
   #ifdef USE_MAXON_MOTOR
     case MOTOR_RAW_PWM:
       /* Reset the auto stop timer */
       if (arg1 != 0 || arg2 != 0) lastMotorCommand = millis(); 
-      setMotorSpeeds(arg1, arg2, sweeper_blocked);
+      setMotorSpeeds(arg1, arg2, sweeper_blocked, duplo_storage);
       current_speed_l = arg1;
       current_speed_r = arg2;
       Serial.println("OK");
@@ -408,7 +393,7 @@ void battery_voltage() {
   // Use the median value to update the battery voltage
   voltage_battery = alpha * medianVoltage + (1 - alpha) * voltage_battery;
 
-  // Compute battery percentage (0% = 10.3V, 100% = 12.55V)
+  // Compute battery percentage (0% = 10.3V, 100% = 12.52V)
   if (voltage_battery < 10.3) {
     battery_pourcentage = 0;
   } else if (voltage_battery > 12.52) {
@@ -472,7 +457,7 @@ void control_LEDs() {
     fill_solid(leds, NUM_LEDS, CHSV(current_color, 255, fadeCounter));
     FastLED.show();
   } else if (servo_state == ROTATING_L or servo_state == ROTATING_R) {
-    if (currentMillis_LED - previousMillis_LED >= OLED_INTERVAL) {
+    if (currentMillis_LED - previousMillis_LED >= 1000) {
       previousMillis_LED = currentMillis_LED;
 
       if (servo_state == ROTATING_L) {
@@ -689,7 +674,7 @@ void loop() {
   #ifdef USE_MAXON_MOTOR
     // Check to see if we have exceeded the auto-stop interval
     if ((millis() - lastMotorCommand) > AUTO_STOP_INTERVAL) {;
-      setMotorSpeeds(0, 0, sweeper_blocked);
+      setMotorSpeeds(0, 0, sweeper_blocked, duplo_storage);
       current_speed_l = 0;
       current_speed_r = 0;
     } 
@@ -712,26 +697,34 @@ void loop() {
 
   #ifdef USE_SERVOS
     if (servo_state == ROTATING_L){
-      if (digitalRead(EOC_SWITCH) != 0 && ServoDown){
+      if (!timerActiveUp && ServoDown){
+        timerUp = millis();      // Start the timer
+        timerActiveUp = true;         // Activate the timer
+      } 
+      if (millis() - timerUp <= 5500) {
+        turnServo(LEFT, 400);
+      } else if (digitalRead(EOC_SWITCH) != 0 && ServoDown){
         turnServo(LEFT, 400);
       } else {
         stopServo();
         ServoDown = false;
         duplo_storage = 0;
+        timerActiveUp = false;        // Deactivate the timer
         servo_state = IDLE;
       }
+
     } else if (servo_state == ROTATING_R) {
-      if (!timerActive && !ServoDown){
-        timerStart = millis();      // Start the timer
-        timerActive = true;         // Activate the timer
+      if (!timerActiveDown && !ServoDown){
+        timerDown = millis();      // Start the timer
+        timerActiveDown = true;    // Activate the timer
       } 
-      if (timerActive) {
-        if (!ServoDown && (millis() - timerStart <= 3600)){ //4600 ms for 600 speed
-          turnServo(RIGHT, 700);
+      if (timerActiveDown) {
+        if (!ServoDown && (millis() - timerDown <= 3700)){ //4600 ms for 600 speed
+          turnServo(RIGHT, 650);
         } else {
           ServoDown = true;
           stopServo(); 
-          timerActive = false;        // Deactivate the timer
+          timerActiveDown = false;        // Deactivate the timer
           servo_state = IDLE;
         }
       } else {

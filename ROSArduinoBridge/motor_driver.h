@@ -1,5 +1,5 @@
 /***************************************************************
-   Motor driver function definitions - by James Nugen
+   Motor driver function definitions
    *************************************************************/
 
 #ifdef USE_MAXON_MOTOR
@@ -18,7 +18,7 @@
 
   void initMotorController();
   void setMotorSpeed(int i, int spd);
-  void setMotorSpeeds(int leftSpeed, int rightSpeed, bool sweeper_blocked);
+  void setMotorSpeeds(int leftSpeed, int rightSpeed, bool sweeper_blocked, bool duplo_storage);
 
 #endif
 
@@ -33,13 +33,17 @@
   #define LEFT_SWEEPER_DIRECTION 10
   #define LEFT_SWEEPER_IS A0
   #define LEFT_SWEEPER_REVERSE_SPEED 85
-  int RIGHT_SWEEPER_SPEED = 120; //115
-  int LEFT_SWEEPER_SPEED = 135; //120
 
+  int RIGHT_SWEEPER_SPEED = 155;
+  int LEFT_SWEEPER_SPEED = 165;
+
+  int RIGHT_SWEEPER_SPEED_LOW = 120;
+  int LEFT_SWEEPER_SPEED_LOW  = 125;
+
+  void activateSweeper();
   void activateSweeper();
   void stopSweeper();
   void reverseSweeper();
   void invertSweeperSpeeds();
 
 #endif
-
