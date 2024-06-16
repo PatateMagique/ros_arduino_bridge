@@ -3,7 +3,7 @@
 This Arduino library turns an arduino into a multifunction hardware manager.
 It provides a simple serial interface to communicate with a high-level computer (e.g. running ROS), and generates the appropriate PWM signals for motors and other components.
 
-This is a fork Josh Ewans's [ros_arduino_bridge](https://github.com/joshnewans/ros_arduino_bridge) which is also a forw of the original the original [ros_arduino_bridge](https://github.com/hbrobotics/ros_arduino_bridge) code. Our version is a lightweight and stripped down version of Josh's code. Check out `README-original.md` for the original README and `README-articulated.md` for Josh's README.
+This is a fork from Josh Ewans's [ros_arduino_bridge](https://github.com/joshnewans/ros_arduino_bridge) which is also a fork of the original the original [ros_arduino_bridge](https://github.com/hbrobotics/ros_arduino_bridge) code. Our version is a lightweight and stripped down version of Josh's code. Check out `README-original.md` for the original README and `README-articulated.md` for Josh's README.
 
 As we only need a subset of the functionality originally proposed by this library, the code has been simplified as much as possible and we kept only the features relevant to the project.
 
